@@ -25,13 +25,19 @@ byte mac[] = {
   0x90, 0xA2, 0xDA, 0x0F, 0x9E, 0x4C };
 IPAddress ip(10,0,0,127);
 const int ledPin = 9;
-unsigned long localPort = 50000;      // local port to listen on
-int x;
+unsigned long localPort = 50074;      // local port to listen on
 // buffers for receiving and sending data
 char packetBuffer[UDP_TX_PACKET_MAX_SIZE]; //buffer to hold incoming packet,
 char  ReplyBuffer[] = "acknowledged";       // a string to send back
-
+const int LONGSIZE = sizeof(long int);
 // An EthernetUDP instance to let us send and receive packets over UDP
+
+unsigned char buf[LONGSIZE];
+
+uint8_t adres;
+uint8_t command;
+long value;
+
 EthernetUDP Udp;
 
 void setup() {
@@ -40,18 +46,21 @@ void setup() {
   Udp.begin(localPort);
   Wire.begin();
   Serial.begin(9600);
+  
 }
 
 void loop() {
   // if there's data available, read a packet
+
   int packetSize = Udp.parsePacket();
+  int i;
   if(packetSize)
   {
     Serial.print("Received packet of size ");
     Serial.println(packetSize);
     Serial.print("From ");
     IPAddress remote = Udp.remoteIP();
-    for (int i =0; i < 4; i++)
+    for (i =0; i < 4; i++)
     {
       Serial.print(remote[i], DEC);
       if (i < 3)
@@ -61,33 +70,40 @@ void loop() {
     }
     Serial.print(", port ");
     Serial.println(Udp.remotePort());
-
-    // read the packet into packetBufffer
+    for(i=0; i < UDP_TX_PACKET_MAX_SIZE; i++)
+    packetBuffer[i]=0;
     Udp.read(packetBuffer,UDP_TX_PACKET_MAX_SIZE);
     Serial.println("Contents:");
     Serial.println(packetBuffer);
-
-    sendCommand(10);
-    // send a reply, to the IP address and port that sent us the packet we received
+    sscanf(packetBuffer, "%1d %1d %ld", &adres, &command, &value);
+    Serial.println(adres);
+    Serial.println(command);
+    Serial.println(value);
+    sendCommand(adres, command, value);
+    /*send a reply, to the IP address and port that sent us the packet we received
     Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
     Udp.write(ReplyBuffer);
     Udp.endPacket();
+    */
   }
-  delay(10);
+
+
 }
 
-void sendCommand(uint8_t _command) {
+void sendCommand(uint8_t wireAdres, uint8_t _command, long _value) {
+  int i;
   digitalWrite(ledPin, HIGH);
-  Wire.beginTransmission(4); 
-  {
-    Wire.write("x is ");        // sends five bytes
-    Wire.write(x);              // sends one byte  
-   x++;
- //   Wire.write(_command);        // sends byte DMX1
 
-  }     // sends byte DMX1
+  for(i=0; i < LONGSIZE; i++)
+    buf[i]=0;
+  memcpy(buf, &_value, 4);
+  Wire.beginTransmission(wireAdres); 
+     for(i=0; i < LONGSIZE; i++) {
+        Serial.print(buf[i], DEC); Serial.print('-');
+        Wire.write(buf[i]); }       // send long
+     Wire.write(_command);        // sends byte DMX1
   Wire.endTransmission();    // stop transmitting
-
+  Serial.println();
   digitalWrite(ledPin, LOW);
 }
 /*
